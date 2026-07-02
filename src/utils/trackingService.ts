@@ -1,3 +1,5 @@
+import { supabase } from '../lib/supabase';
+
 export interface VisitorData {
   id: string;
   deviceName: string;
@@ -10,10 +12,12 @@ export interface VisitorData {
     city?: string;
   };
   userAgent: string;
+  visitCount: number;
 }
 
 export interface TrackingStats {
   totalVisitors: number;
+  totalVisits: number;
   visitorsByDevice: Record<string, number>;
   visitorsByLocation: Array<{
     name: string;
@@ -68,7 +72,7 @@ export class TrackingService {
       console.log('[Tracking] Solicitando permiso de ubicación...');
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          console.log('[Tracking] Ubicación obtenida:', position.coords);
+          console.log('[Tracking] Ubicación obtenida exitosamente:', position.coords);
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
@@ -76,10 +80,25 @@ export class TrackingService {
           });
         },
         (error) => {
-          console.log('[Tracking] Error al obtener ubicación:', error.message);
+          console.log('[Tracking] Error al obtener ubicación:', error.code, error.message);
+          let errorMsg = '';
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMsg = 'El usuario negó el permiso de ubicación';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMsg = 'La información de ubicación no está disponible';
+              break;
+            case error.TIMEOUT:
+              errorMsg = 'La solicitud de ubicación expiró';
+              break;
+            default:
+              errorMsg = 'Error desconocido al obtener la ubicación';
+          }
+          console.log('[Tracking]', errorMsg);
           resolve(null);
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
       );
     });
   }
@@ -105,7 +124,7 @@ export class TrackingService {
       (error) => {
         console.log('[Tracking] Error en seguimiento en tiempo real:', error.message);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 }
     );
   }
 
@@ -120,7 +139,6 @@ export class TrackingService {
     const stats = this.getStoredData();
     const visitorId = this.getVisitorId();
     
-    // Update or add current visitor
     const existingIndex = stats.recentVisitors.findIndex(v => v.id === visitorId);
     
     if (existingIndex !== -1) {
@@ -134,13 +152,13 @@ export class TrackingService {
         timestamp: Date.now(),
         userAgent: navigator.userAgent,
         location: location,
+        visitCount: 1,
       };
       stats.recentVisitors.unshift(visitor);
       stats.recentVisitors = stats.recentVisitors.slice(0, 50);
       stats.totalVisitors = stats.recentVisitors.length;
     }
 
-    // Update location stats
     const existingLocationIndex = stats.visitorsByLocation.findIndex(
       loc => Math.abs(loc.lat - location.latitude) < 0.01 &&
              Math.abs(loc.lng - location.longitude) < 0.01
@@ -155,7 +173,6 @@ export class TrackingService {
       });
     }
 
-    // Update device stats
     const deviceTypeKey = this.getDeviceType();
     if (existingIndex === -1) {
       stats.visitorsByDevice[deviceTypeKey] = (stats.visitorsByDevice[deviceTypeKey] || 0) + 1;
@@ -169,16 +186,26 @@ export class TrackingService {
     if (!data) {
       return {
         totalVisitors: 0,
+        totalVisits: 0,
         visitorsByDevice: {},
         visitorsByLocation: [],
         recentVisitors: [],
       };
     }
     try {
-      return JSON.parse(data);
-    } catch {
+      const parsed = JSON.parse(data);
+      return {
+        totalVisitors: parsed.totalVisitors || 0,
+        totalVisits: parsed.totalVisits || 0,
+        visitorsByDevice: parsed.visitorsByDevice || {},
+        visitorsByLocation: parsed.visitorsByLocation || [],
+        recentVisitors: parsed.recentVisitors || [],
+      };
+    } catch (e) {
+      console.error('[Tracking] Error al leer datos de localStorage:', e);
       return {
         totalVisitors: 0,
+        totalVisits: 0,
         visitorsByDevice: {},
         visitorsByLocation: [],
         recentVisitors: [],
@@ -187,39 +214,85 @@ export class TrackingService {
   }
 
   private saveData(stats: TrackingStats) {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stats));
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stats));
+      console.log('[Tracking] Datos guardados en localStorage:', stats);
+    } catch (e) {
+      console.error('[Tracking] Error al guardar datos en localStorage:', e);
+    }
+  }
+
+  private async sendVisitorToSupabase(visitor: VisitorData) {
+    try {
+      console.log('[Tracking] Enviando datos a Supabase...');
+      const { data, error } = await supabase
+        .from('visitors')
+        .upsert({
+          id: visitor.id,
+          device_name: visitor.deviceName,
+          device_type: visitor.deviceType,
+          timestamp: new Date(visitor.timestamp).toISOString(),
+          latitude: visitor.location?.latitude,
+          longitude: visitor.location?.longitude,
+          accuracy: visitor.location?.accuracy,
+          user_agent: visitor.userAgent,
+          visit_count: visitor.visitCount,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'id',
+        });
+
+      if (error) {
+        console.error('[Tracking] Error al enviar a Supabase:', error);
+      } else {
+        console.log('[Tracking] Datos enviados a Supabase exitosamente:', data);
+      }
+    } catch (err) {
+      console.error('[Tracking] Error inesperado al enviar a Supabase:', err);
+    }
   }
 
   async trackVisit(): Promise<VisitorData> {
+    console.log('[Tracking] Iniciando seguimiento de visita...');
     const stats = this.getStoredData();
     const visitorId = this.getVisitorId();
-    const location = await this.getCurrentLocation();
     
-    const visitor: VisitorData = {
-      id: visitorId,
-      deviceName: this.getDeviceName(),
-      deviceType: this.getDeviceType(),
-      timestamp: Date.now(),
-      userAgent: navigator.userAgent,
-      location: location || undefined,
-    };
-
-    // Check if this visitor already exists in recent visitors
+    console.log('[Tracking] Obteniendo ubicación...');
+    const location = await this.getCurrentLocation();
+    console.log('[Tracking] Ubicación final:', location);
+    
     const existingIndex = stats.recentVisitors.findIndex(v => v.id === visitorId);
+    
+    let visitor: VisitorData;
+    
     if (existingIndex === -1) {
+      visitor = {
+        id: visitorId,
+        deviceName: this.getDeviceName(),
+        deviceType: this.getDeviceType(),
+        timestamp: Date.now(),
+        userAgent: navigator.userAgent,
+        location: location || undefined,
+        visitCount: 1,
+      };
       stats.recentVisitors.unshift(visitor);
-      stats.recentVisitors = stats.recentVisitors.slice(0, 50); // Keep last 50 visitors
+      stats.recentVisitors = stats.recentVisitors.slice(0, 50);
+      stats.totalVisitors = stats.recentVisitors.length;
+      
+      const deviceTypeKey = visitor.deviceType;
+      stats.visitorsByDevice[deviceTypeKey] = (stats.visitorsByDevice[deviceTypeKey] || 0) + 1;
     } else {
-      // Update existing visitor
+      visitor = {
+        ...stats.recentVisitors[existingIndex],
+        timestamp: Date.now(),
+        location: location || stats.recentVisitors[existingIndex].location,
+        visitCount: (stats.recentVisitors[existingIndex].visitCount || 1) + 1,
+      };
       stats.recentVisitors[existingIndex] = visitor;
     }
+    
+    stats.totalVisits = (stats.totalVisits || 0) + 1;
 
-    // Update device stats
-    const deviceTypeKey = visitor.deviceType;
-    stats.visitorsByDevice[deviceTypeKey] = (stats.visitorsByDevice[deviceTypeKey] || 0) + 1;
-    stats.totalVisitors = stats.recentVisitors.length;
-
-    // Update location stats
     if (visitor.location) {
       const existingLocationIndex = stats.visitorsByLocation.findIndex(
         loc => Math.abs(loc.lat - visitor.location!.latitude) < 0.1 &&
@@ -239,11 +312,24 @@ export class TrackingService {
     }
 
     this.saveData(stats);
+    
+    // Enviar datos a Supabase en segundo plano
+    this.sendVisitorToSupabase(visitor);
+    
+    console.log('[Tracking] Visita registrada exitosamente:', visitor);
     return visitor;
   }
 
   getStats(): TrackingStats {
-    return this.getStoredData();
+    const stats = this.getStoredData();
+    console.log('[Tracking] Obteniendo estadísticas:', stats);
+    return stats;
+  }
+
+  clearAllData() {
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    localStorage.removeItem(VISITOR_ID_KEY);
+    console.log('[Tracking] Todos los datos de tracking han sido eliminados');
   }
 }
 

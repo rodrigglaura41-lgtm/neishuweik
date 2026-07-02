@@ -114,15 +114,26 @@ export function Estadisticas() {
     <div className="min-h-screen bg-gray-50 w-full">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 px-6 py-4 shadow-sm">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">📊 Dashboard de Estadísticas</h1>
             <p className="text-sm text-gray-500 mt-1">Datos de uso de la aplicación Namui Wam</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <a href="/" className="text-sm font-semibold text-blue-600 hover:text-blue-800 underline">
               ← Volver al juego
             </a>
+            <button 
+              onClick={() => {
+                if (window.confirm('¿Estás seguro de que quieres borrar todos los datos de tracking?')) {
+                  trackingService.clearAllData();
+                  setStats(trackingService.getStats());
+                }
+              }}
+              className="text-sm font-semibold text-orange-600 hover:text-orange-800 underline"
+            >
+              🗑️ Borrar datos
+            </button>
             <button 
               onClick={handleLogout}
               className="text-sm font-semibold text-red-600 hover:text-red-800 underline"
@@ -146,22 +157,22 @@ export function Estadisticas() {
           
           <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader className="pb-2">
-              <CardTitle className="text-3xl font-bold text-green-600">{stats.visitorsByLocation.length}</CardTitle>
+              <CardTitle className="text-3xl font-bold text-green-600">{stats.totalVisits}</CardTitle>
+              <CardDescription>Visitas totales</CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="shadow-md hover:shadow-lg transition-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-3xl font-bold text-purple-600">{stats.visitorsByLocation.length}</CardTitle>
               <CardDescription>Ubicaciones únicas</CardDescription>
             </CardHeader>
           </Card>
 
           <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader className="pb-2">
-              <CardTitle className="text-3xl font-bold text-purple-600">{stats.visitorsByDevice.mobile || 0}</CardTitle>
+              <CardTitle className="text-3xl font-bold text-yellow-600">{stats.visitorsByDevice.mobile || 0}</CardTitle>
               <CardDescription>Usuarios en móvil</CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="shadow-md hover:shadow-lg transition-shadow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-3xl font-bold text-yellow-600">{stats.recentVisitors.length}</CardTitle>
-              <CardDescription>Visitas recientes</CardDescription>
             </CardHeader>
           </Card>
         </div>
@@ -235,7 +246,8 @@ export function Estadisticas() {
                   <TableRow>
                     <TableHead>Dispositivo</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>Fecha y Hora</TableHead>
+                    <TableHead>Visitas</TableHead>
+                    <TableHead>Última visita</TableHead>
                     <TableHead>Ubicación</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -247,6 +259,9 @@ export function Estadisticas() {
                         <Badge style={{ backgroundColor: deviceColors[visitor.deviceType] }} className="text-white">
                           {deviceNames[visitor.deviceType]}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="font-bold text-blue-600">
+                        {visitor.visitCount || 1}
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
                         {new Date(visitor.timestamp).toLocaleString('es-ES')}
@@ -269,7 +284,7 @@ export function Estadisticas() {
                   ))}
                   {stats.recentVisitors.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-gray-500">
+                      <TableCell colSpan={5} className="h-24 text-center text-gray-500">
                         No hay visitas registradas aún
                       </TableCell>
                     </TableRow>
@@ -309,6 +324,75 @@ export function Estadisticas() {
             </CardContent>
           </Card>
         )}
+
+        {/* Ayuda y Solución de Problemas */}
+        <Card className="shadow-md hover:shadow-lg transition-shadow mt-8">
+          <CardHeader>
+            <CardTitle>🔧 Solución de Problemas de Geolocalización</CardTitle>
+            <CardDescription>Si no se solicita la ubicación o no funciona, sigue estos pasos:</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-blue-600">📱 En Dispositivos Móviles</h3>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">1.</span>
+                    <span>Asegúrate de tener el GPS/ubicación activado en la configuración del dispositivo</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">2.</span>
+                    <span>Verifica que el navegador tenga permisos de ubicación</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">3.</span>
+                    <span>Si usas Chrome/Edge, abre la configuración del sitio (🔒 en la barra de direcciones) y permite la ubicación</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">4.</span>
+                    <span>Si estás en modo incógnito, algunos navegadores bloquean la ubicación por defecto</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">5.</span>
+                    <span>Para Android: Configuración &gt; Ubicación &gt; Activar y modo "Alta precisión"</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">6.</span>
+                    <span>Para iOS: Configuración &gt; Privacidad y Seguridad &gt; Servicios de Localización &gt; [Tu navegador] &gt; "Mientras usa la app"</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-green-600">💻 En Computadoras</h3>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">1.</span>
+                    <span>Permite la ubicación cuando el navegador lo solicite</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">2.</span>
+                    <span>Verifica la configuración del sitio: haz clic en el ícono 🔒 a la izquierda de la URL</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">3.</span>
+                    <span>Asegúrate de que tu computadora tenga WiFi o GPS activado</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">4.</span>
+                    <span>En Chrome: Configuración &gt; Privacidad y seguridad &gt; Configuración de sitios &gt; Ubicación</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+              <p className="font-bold text-yellow-800">⚠️ Importante:</p>
+              <p className="text-sm text-yellow-700">
+                La geolocalización requiere una conexión segura (HTTPS). Si estás accediendo mediante HTTP (ej: localhost en una red), 
+                la ubicación podría no funcionar en dispositivos móviles.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
