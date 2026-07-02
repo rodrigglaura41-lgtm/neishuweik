@@ -122,10 +122,10 @@ function LevelView({ level, onBack, onStudy }: { level: VocabLevel; onBack: () =
       </div>
 
       {/* Column headers */}
-      <div
-        className="flex items-center px-3 sm:px-4 py-2 border-y-2 border-foreground sticky top-[57px] z-10"
-        style={{ backgroundColor: level.bg }}
-      >
+        <div
+          className="flex items-center px-3 sm:px-4 py-2 border-y-2 border-foreground sticky top-[100px] z-10"
+          style={{ backgroundColor: level.bg }}
+        >
         <div className="flex-1 text-xs font-black text-muted-foreground uppercase tracking-wider text-left">Español</div>
         <div className="w-14 sm:w-16 text-xs font-black text-muted-foreground uppercase tracking-wider text-center">Imagen</div>
         <div className="flex-1 text-xs font-black text-muted-foreground uppercase tracking-wider text-right">Namtrik</div>

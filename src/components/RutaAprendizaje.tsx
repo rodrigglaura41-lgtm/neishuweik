@@ -3,63 +3,83 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Lesson1 } from './Lessons/Lesson1';
 import { Lesson2 } from './Lessons/Lesson2';
 import { DynamicChallenge } from './DynamicChallenge';
-import { MisakShield } from './MisakShield';
 import { MisakGuide } from './MisakGuide';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { vocabulario } from '@/data/vocabulario';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TOTAL_LESSONS = 7;
+const TOTAL_LESSONS = 10;
 
 const NODES = [
-  { id: 1, title: 'Números',     subtitle: 'Kampawam',         icon: '🔢', offset: '-translate-x-10 sm:-translate-x-16' },
+  { id: 1, title: 'Números',     subtitle: 'Kampawam',       icon: '🔢', offset: '-translate-x-10 sm:-translate-x-16' },
   { id: 2, title: '4 Estaciones del año',  subtitle: 'Pip UtƟmera Pilayu',     icon: '🌿', offset: 'translate-x-10 sm:translate-x-16'   },
   { id: 3, title: 'El Cuerpo',   subtitle: 'Nei Asr',         icon: '🧍', offset: '-translate-x-10 sm:-translate-x-16' },
   { id: 4, title: 'El Hogar',    subtitle: 'Yampu PonstrapelƟ', icon: '🏠', offset: 'translate-x-10 sm:translate-x-16'   },
   { id: 5, title: 'Tecnología',  subtitle: 'Wamsrup',         icon: '💻', offset: '-translate-x-10 sm:-translate-x-16' },
   { id: 6, title: 'Matemáticas', subtitle: 'NemarƟp',         icon: '📐', offset: 'translate-x-10 sm:translate-x-16'   },
   { id: 7, title: 'Sociedad',    subtitle: 'MukƟpen',       icon: '🌍', offset: '-translate-x-10 sm:-translate-x-16' },
+  { id: 8, title: 'Animales domésticos', subtitle: 'Yau ushamera', icon: '🐔', offset: 'translate-x-10 sm:translate-x-16' },
+  { id: 9, title: 'Animales del monte', subtitle: 'Kau umpu amƟñip ushamera', icon: '🐅', offset: '-translate-x-10 sm:-translate-x-16' },
+  { id: 10, title: 'Cultura y tradiciones', subtitle: 'Palabras importantes', icon: '🎭', offset: 'translate-x-10 sm:translate-x-16' },
 ] as const;
 
-const VOCAB_MAP: Record<number, number> = { 3: 0, 4: 1, 5: 2, 6: 3, 7: 4 };
+const VOCAB_MAP: Record<number, number> = { 3: 0, 4: 1, 5: 2, 6: 3, 7: 4, 8: 5, 9: 6, 10: 7 };
 
-const FINAL_MESSAGE = `Aprendiste los números, las estaciones, el cuerpo, los objetos del hogar, la tecnología, las matemáticas y los conceptos de la sociedad Misak.`;
+const FINAL_MESSAGE = `Aprendiste los números, las estaciones, el cuerpo, los objetos del hogar, la tecnología, las matemáticas, los conceptos de la sociedad Misak, los animales (domésticos y del monte) y la cultura y tradiciones del pueblo Misak.`;
 
 // ─── Root Component ───────────────────────────────────────────────────────────
 
-export function RutaAprendizaje() {
-  const [hearts,             setHearts]             = useState(3);
-  const [completedLessons,   setCompletedLessons]   = useState<number[]>([]);
+export function RutaAprendizaje({ 
+  completedLessons, 
+  onCompleteLesson, 
+  onMistake, 
+  hearts 
+}: { 
+  completedLessons: number[], 
+  onCompleteLesson: (id: number) => void, 
+  onMistake: () => void,
+  hearts: number
+}) {
   const [activeLesson,       setActiveLesson]       = useState<number | null>(null);
   const [showInfiniteHearts, setShowInfiniteHearts] = useState(false);
   const [showFinalPrize,     setShowFinalPrize]     = useState(false);
 
   const progress = Math.round((completedLessons.length / TOTAL_LESSONS) * 100);
 
-  const loseHeart = () => setHearts(h => {
-    if (h > 1) return h - 1;
-    setShowInfiniteHearts(true);
-    return 3;
-  });
-
-  const completeLesson = (id: number) => {
-    if (!completedLessons.includes(id)) setCompletedLessons(prev => [...prev, id]);
-    setActiveLesson(null);
-  };
-
+  // const isUnlocked = (id: number) => id === 1 || completedLessons.includes(id - 1) || id === 10;
   const isUnlocked = (id: number) => id === 1 || completedLessons.includes(id - 1);
 
   // Determine the guide speech on the map
   const nextNodeId = NODES.find(n => !completedLessons.includes(n.id))?.id ?? null;
-  const mapSpeech = nextNodeId
-    ? `¡Toca el nodo "${NODES[nextNodeId - 1].title}" para continuar! 🌿`
-    : '¡Has completado todo el camino! 🎉 Abre el cofre secreto.';
+  let mapSpeech = '';
+  
+  if (!nextNodeId) {
+    // Ya completó todo el juego
+    mapSpeech = '¡Has completado todo el camino! 🎉 ¡Eres un genio! Abre el cofre secreto para tu premio.';
+  } else if (completedLessons.length === 0) {
+    // Primera vez jugando
+    mapSpeech = '¡Bienvenido a Namui Wam! 🎉 ¡Qué emoción que estés aquí! Empecemos con el nivel de Números. Toca el nodo 🔢 para empezar.';
+  } else {
+    // Jugador regresando
+    const nextNode = NODES[nextNodeId - 1];
+    mapSpeech = `¡Qué bueno verte de nuevo! 😊 Te quedaste en el nivel de ${nextNode.title}. Toca el nodo ${nextNode.icon} para continuar aprendiendo!`;
+  }
+
+  const handleCompleteLesson = (id: number) => {
+    onCompleteLesson(id);
+    setActiveLesson(null);
+  };
+
+  const handleMistake = () => {
+    onMistake();
+    if (hearts <= 1) {
+      setShowInfiniteHearts(true);
+    }
+  };
 
   return (
     <div className="w-full flex flex-col items-center">
-      <HeroHeader progress={progress} hearts={hearts} />
-
       {/* Node Map */}
       {!activeLesson && (
         <NodeMap
@@ -85,13 +105,13 @@ export function RutaAprendizaje() {
               className="mb-3 flex items-center gap-1 font-bold text-sm text-foreground/60 hover:text-foreground transition-colors">
               ← Volver al mapa
             </button>
-            {activeLesson === 1 && <Lesson1 onComplete={() => completeLesson(1)} onMistake={loseHeart} />}
-            {activeLesson === 2 && <Lesson2 onComplete={() => completeLesson(2)} onMistake={loseHeart} />}
-            {activeLesson >= 3 && activeLesson <= 7 && (
+            {activeLesson === 1 && <Lesson1 onComplete={() => handleCompleteLesson(1)} onMistake={handleMistake} />}
+            {activeLesson === 2 && <Lesson2 onComplete={() => handleCompleteLesson(2)} onMistake={handleMistake} />}
+            {activeLesson >= 3 && activeLesson <= 10 && (
               <DynamicChallenge
                 level={vocabulario[VOCAB_MAP[activeLesson]]}
-                onComplete={() => completeLesson(activeLesson)}
-                onMistake={loseHeart}
+                onComplete={() => handleCompleteLesson(activeLesson)}
+                onMistake={handleMistake}
               />
             )}
           </motion.div>
@@ -109,31 +129,6 @@ export function RutaAprendizaje() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function HeroHeader({ progress, hearts }: { progress: number; hearts: number }) {
-  return (
-    <div className="w-full px-4 pt-5 pb-4 text-center">
-      <div className="flex justify-center mb-3">
-        <MisakShield size={80} />
-      </div>
-      <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">Namui Wam</h1>
-      <p className="font-bold text-base mt-1" style={{ color: '#1E3A8A' }}>Palabra viva 💧</p>
-
-      <div className="flex justify-between items-center mt-5 mb-2">
-        <div className="flex space-x-1">
-          {[1, 2, 3].map(i => (
-            <span key={i} className="text-xl">{i <= hearts ? '❤️' : '🖤'}</span>
-          ))}
-        </div>
-        <span className="font-bold text-foreground text-sm">{progress}%</span>
-      </div>
-      <div className="w-full h-4 bg-muted rounded-full border-2 border-foreground overflow-hidden">
-        <div className="h-full transition-all duration-700 ease-out"
-          style={{ width: `${progress}%`, background: 'linear-gradient(to right, #E6007E, #1E3A8A)' }} />
-      </div>
-    </div>
-  );
-}
-
 function NodeMap({ nodes, completedLessons, isUnlocked, onNodeClick, onOpenPrize, progress, mapSpeech }: {
   nodes: typeof NODES;
   completedLessons: number[];
@@ -143,6 +138,9 @@ function NodeMap({ nodes, completedLessons, isUnlocked, onNodeClick, onOpenPrize
   progress: number;
   mapSpeech: string;
 }) {
+  // Encontrar el próximo nivel disponible
+  const nextNodeId = NODES.find(n => !completedLessons.includes(n.id))?.id ?? null;
+
   return (
     <div className="w-full flex flex-col items-center gap-8 py-6 px-4 relative">
       {/* Guide at top of map */}
@@ -162,6 +160,7 @@ function NodeMap({ nodes, completedLessons, isUnlocked, onNodeClick, onOpenPrize
           offset={node.offset}
           isUnlocked={isUnlocked(node.id)}
           isCompleted={completedLessons.includes(node.id)}
+          isNext={node.id === nextNodeId}
           onClick={() => onNodeClick(node.id)}
         />
       ))}
@@ -177,9 +176,9 @@ function NodeMap({ nodes, completedLessons, isUnlocked, onNodeClick, onOpenPrize
   );
 }
 
-function LessonNodeButton({ id, title, subtitle, icon, offset, isUnlocked, isCompleted, onClick }: {
+function LessonNodeButton({ id, title, subtitle, icon, offset, isUnlocked, isCompleted, isNext, onClick }: {
   id: number; title: string; subtitle: string; icon: string; offset: string;
-  isUnlocked: boolean; isCompleted: boolean; onClick: () => void;
+  isUnlocked: boolean; isCompleted: boolean; isNext: boolean; onClick: () => void;
 }) {
   const bgStyle   = isUnlocked && !isCompleted ? { backgroundColor: '#1E3A8A' } : {};
   const bgClass   = isCompleted ? 'bg-yellow-400' : !isUnlocked ? 'bg-gray-300' : '';
@@ -187,14 +186,31 @@ function LessonNodeButton({ id, title, subtitle, icon, offset, isUnlocked, isCom
 
   return (
     <div className={`relative flex flex-col items-center ${offset}`} data-testid={`lesson-node-${id}`}>
-      <button disabled={!isUnlocked} onClick={onClick} style={bgStyle}
+      <motion.button 
+        disabled={!isUnlocked} 
+        onClick={onClick} 
+        style={bgStyle}
+        animate={isNext ? { scale: [1, 1.1, 1], boxShadow: ['0_6px_0_0_#111827', '0_10px_0_0_#111827', '0_6px_0_0_#111827'] } : {}}
+        transition={isNext ? { repeat: Infinity, duration: 1.5, ease: 'easeInOut' } : {}}
         className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 ${borderCls}
           flex items-center justify-center text-2xl sm:text-3xl transition-all
           ${isUnlocked
             ? 'shadow-[0_6px_0_0_#111827] active:translate-y-[4px] active:shadow-[0_2px_0_0_#111827]'
-            : 'opacity-60 cursor-not-allowed'} ${bgClass}`}>
+            : 'opacity-60 cursor-not-allowed'} ${bgClass}`}
+      >
         {isCompleted ? '⭐' : !isUnlocked ? '🔒' : icon}
-      </button>
+      </motion.button>
+      
+      {isNext && (
+        <motion.div 
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute -bottom-7 text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-full border border-green-300"
+        >
+          ¡Siguiente! 👉
+        </motion.div>
+      )}
+
       <div className="mt-2 flex flex-col items-center">
         <div className="font-bold text-foreground text-xs sm:text-sm bg-white px-2 sm:px-3 py-1 rounded-full border-2 border-foreground shadow-sm whitespace-nowrap">
           {title}
@@ -254,7 +270,6 @@ function FinalPrizeModal({ open, message, onClose }: { open: boolean; message: s
         <h2 className="text-2xl sm:text-3xl font-black text-center mb-5">NEI ISHUK MISAK 🥳</h2>
         <div className="space-y-3 font-bold text-base sm:text-lg text-foreground/80 text-center leading-relaxed">
           <p>{message}</p>
-          {/* <p>Ahora sabes decir en Namui Wam lo que yo siento cada día:</p> */}
           <p className="text-2xl sm:text-3xl font-black py-3" style={{ color: '#1E3A8A' }}>KualӨm mӨrӨk kusremik.</p>
           <p>Gracias por llegar hasta aquí. Cada palabra aprendida es una forma de mantener viva la memoria, la identidad y la belleza del pueblo Misak. 🌿💙❤️</p>
           <p className="pt-3 font-black" style={{ color: '#353535' }}>Más allá de las palabras, valoro tu interés por aprender tu curiosidad, tu esfuerzo y el tiempo que dedicaste a este camino. ✨</p>

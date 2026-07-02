@@ -4,11 +4,11 @@ import { MisakShield } from './MisakShield';
 import { MisakGuide } from './MisakGuide';
 
 const HOW_TO_PLAY = [
-  { icon: '🗺️', text: 'Recorrerás 7 niveles secuenciales, del más fácil al más difícil.' },
+  { icon: '🗺️', text: 'Recorrerás 10 niveles secuenciales, del más fácil al más difícil.' },
   { icon: '❤️', text: 'Como Nei Ishuk Misak, tendrás 3 vidas y corazones infinitos para seguir jugando sin límites!' },
   { icon: '🎯', text: 'Superarás desafíos dinámicos: selección múltiple, emparejamiento, verdad/mentira y constructor de palabras.' },
   { icon: '📚', text: 'Explora el vocabulario completo (125 palabras) y la cosmovisión del pueblo Misak.' },
-  { icon: '🎁', text: 'Al completar los 7 niveles, desbloquearás un Cofre Secreto con un mensaje especial.' },
+  { icon: '🎁', text: 'Al completar los 10 niveles, desbloquearás un Cofre Secreto con un mensaje especial.' },
 ];
 
 interface OnboardingModalProps {

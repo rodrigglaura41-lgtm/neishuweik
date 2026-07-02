@@ -26,12 +26,12 @@ export function DynamicChallenge({ level, onComplete, onMistake }: {
 
   const handleSuccess = useCallback(() => {
     setGuideBehavior('happy');
-    setGuideSpeech('¡Srures pishimarø! (¡Excelente!) 🌟');
+    setGuideSpeech('¡Өyampesi sӨl lӨtan payiwan Ñishik! (¡Excelente!) 🌟');
     const next = currentQ + 1;
     setTimeout(() => {
       setGuideBehavior('idle');
       setGuideSpeech(undefined);
-    }, 1400);
+    }, 2400);
     if (next >= 5) onComplete();
     else setCurrentQ(next);
   }, [currentQ, onComplete]);

@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
+import { Estadisticas } from "@/components/Estadisticas";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { Footer } from "@/components/Footer";
 
@@ -13,6 +14,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/Estadisticas" component={Estadisticas} />
       <Route component={NotFound} />
     </Switch>
   );
