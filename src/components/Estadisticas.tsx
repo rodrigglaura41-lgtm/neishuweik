@@ -1,53 +1,94 @@
 import React, { useEffect, useState } from 'react';
 import { trackingService, type TrackingStats, type VisitorData } from '@/utils/trackingService';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { EstadisticasLogin } from './EstadisticasLogin';
+import { ChevronDown, ChevronUp, RefreshCw, MapPin } from 'lucide-react';
 
 export function Estadisticas() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [stats, setStats] = useState<TrackingStats>(trackingService.getStats());
+  const [isLoading, setIsLoading] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedVisitor, setSelectedVisitor] = useState<VisitorData | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // Check if user is already authenticated
     const auth = localStorage.getItem('namuiWam_dashboard_auth');
     if (auth === 'true') {
       setIsAuthenticated(true);
     }
   }, []);
 
+  // Verificar si estamos en HTTPS (requisito para geolocalización en móviles)
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  
   useEffect(() => {
     if (!isAuthenticated) return;
     
-    // Track visit on load only if authenticated
-    const track = async () => {
-      setIsTracking(true);
-      await trackingService.trackVisit();
-      // Start realtime tracking
-      trackingService.startRealTimeTracking((location) => {
-        setCurrentLocation({ lat: location.latitude, lng: location.longitude });
-        setStats(trackingService.getStats());
-      });
-      setIsTracking(false);
+    if (!isHttps && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      console.warn('[Dashboard] ADVERTENCIA: No estás en HTTPS! La geolocalización NO funcionará en dispositivos móviles.');
+    }
+    
+    const initialize = async () => {
+      setIsLoading(true);
+      await syncData();
+      setIsLoading(false);
+      
+      startLocationTracking();
     };
-    track();
+    initialize();
 
-    // Cleanup on unmount
     return () => {
       trackingService.stopRealTimeTracking();
     };
   }, [isAuthenticated]);
+  
+  // Función para recargar la página en HTTPS
+  const redirectToHttps = () => {
+    if (typeof window !== 'undefined') {
+      const httpsUrl = 'https://' + window.location.hostname + window.location.pathname + window.location.search;
+      window.location.href = httpsUrl;
+    }
+  };
+
+  const syncData = async () => {
+    setIsLoading(true);
+    const newStats = await trackingService.syncFromSupabase();
+    setStats(newStats);
+    setIsLoading(false);
+  };
+
+  const startLocationTracking = () => {
+    trackingService.startRealTimeTracking((location) => {
+      setCurrentLocation({ lat: location.latitude, lng: location.longitude });
+      setStats(trackingService.getStats());
+    });
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('namuiWam_dashboard_auth');
     setIsAuthenticated(false);
   };
 
-  // Calculate percentages for charts
+  const toggleRowExpansion = (visitorId: string) => {
+    setExpandedRows((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(visitorId)) {
+        newSet.delete(visitorId);
+      } else {
+        newSet.add(visitorId);
+      }
+      return newSet;
+    });
+  };
+
   const getDevicePercentage = (deviceType: string) => {
     if (stats.totalVisitors === 0) return 0;
     return ((stats.visitorsByDevice[deviceType] || 0) / stats.totalVisitors) * 100;
@@ -65,11 +106,16 @@ export function Estadisticas() {
     tablet: 'Tablet',
   };
 
+  const deviceIcons: Record<string, string> = {
+    mobile: '📱',
+    desktop: '💻',
+    tablet: '📟',
+  };
+
   const getMapUrlForLocation = (location: { lat: number; lng: number }) => {
     return `https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`;
   };
 
-  // Simple pie chart using CSS
   const PieChart = () => {
     const total = Object.values(stats.visitorsByDevice).reduce((a, b) => (a || 0) + (b || 0), 0) || 1;
     const segments = Object.entries(stats.visitorsByDevice).map(([type, count]) => {
@@ -104,15 +150,12 @@ export function Estadisticas() {
     );
   };
 
-  // If not authenticated, show login
   if (!isAuthenticated) {
     return <EstadisticasLogin onLogin={() => setIsAuthenticated(true)} />;
   }
 
-  // If authenticated, show dashboard
   return (
     <div className="min-h-screen bg-gray-50 w-full">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 px-6 py-4 shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-4">
           <div>
@@ -120,6 +163,15 @@ export function Estadisticas() {
             <p className="text-sm text-gray-500 mt-1">Datos de uso de la aplicación Namui Wam</p>
           </div>
           <div className="flex items-center gap-4 flex-wrap">
+            <Button 
+              onClick={syncData} 
+              disabled={isLoading}
+              variant="secondary"
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              {isLoading ? 'Sincronizando...' : 'Sincronizar'}
+            </Button>
             <a href="/" className="text-sm font-semibold text-blue-600 hover:text-blue-800 underline">
               ← Volver al juego
             </a>
@@ -144,9 +196,30 @@ export function Estadisticas() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8 w-full">
-        {/* Top Stats Cards */}
+        {/* Advertencia de HTTPS */}
+        {!isHttps && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && (
+          <div className="mb-8 p-4 bg-red-50 border-l-4 border-red-500 rounded shadow">
+            <div className="flex items-center gap-3">
+              <div className="text-red-500 text-2xl">⚠️</div>
+              <div className="flex-1">
+                <h3 className="font-bold text-red-800 text-lg">Sin HTTPS - Geolocalización no funcionará en móviles!</h3>
+                <p className="text-red-700 text-sm mt-1">
+                  Estás accediendo mediante HTTP. Los navegadores móviles (Android/iOS) 
+                  <strong> NO permiten geolocalización en conexiones inseguras</strong>.
+                </p>
+              </div>
+              <Button 
+                onClick={redirectToHttps} 
+                variant="destructive" 
+                className="flex items-center gap-2"
+              >
+                🔒 Ir a HTTPS
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader className="pb-2">
@@ -177,9 +250,7 @@ export function Estadisticas() {
           </Card>
         </div>
 
-        {/* Charts and Map */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Device Chart */}
           <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader>
               <CardTitle>Dispositivos</CardTitle>
@@ -190,7 +261,6 @@ export function Estadisticas() {
             </CardContent>
           </Card>
 
-          {/* Live Location Map */}
           <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader>
               <CardTitle>📍 Ubicación en Tiempo Real</CardTitle>
@@ -233,17 +303,17 @@ export function Estadisticas() {
           </Card>
         </div>
 
-        {/* Recent Visitors Table */}
         <Card className="shadow-md hover:shadow-lg transition-shadow mb-8">
           <CardHeader>
             <CardTitle>Historial de Visitas</CardTitle>
-            <CardDescription>Listado completo de visitas recientes</CardDescription>
+            <CardDescription>Listado completo de visitas recientes (desde Supabase)</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="h-96">
+            <ScrollArea className="h-[600px]">
               <Table>
                 <TableHeader className="sticky top-0 bg-white z-10">
                   <TableRow>
+                    <TableHead className="w-[80px]">Detalles</TableHead>
                     <TableHead>Dispositivo</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Visitas</TableHead>
@@ -253,39 +323,138 @@ export function Estadisticas() {
                 </TableHeader>
                 <TableBody>
                   {stats.recentVisitors.map((visitor, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">{visitor.deviceName}</TableCell>
-                      <TableCell>
-                        <Badge style={{ backgroundColor: deviceColors[visitor.deviceType] }} className="text-white">
-                          {deviceNames[visitor.deviceType]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-bold text-blue-600">
-                        {visitor.visitCount || 1}
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {new Date(visitor.timestamp).toLocaleString('es-ES')}
-                      </TableCell>
-                      <TableCell>
-                        {visitor.location ? (
-                          <a 
-                            href={getMapUrlForLocation(visitor.location)} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-sm font-semibold text-blue-600 hover:underline"
+                    <React.Fragment key={visitor.id}>
+                      <TableRow className="cursor-pointer hover:bg-gray-50">
+                        <TableCell>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => toggleRowExpansion(visitor.id)}
                           >
-                            📍 Ver en mapa
-                          </a>
-                        ) : (
-                          <span className="text-sm text-gray-400">No disponible</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                            {expandedRows.has(visitor.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="font-medium flex items-center gap-2">
+                          <span className="text-2xl">{deviceIcons[visitor.deviceType]}</span>
+                          {visitor.deviceName}
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            style={{ backgroundColor: deviceColors[visitor.deviceType] || '#6b7280' }} 
+                            className="text-white"
+                          >
+                            {deviceNames[visitor.deviceType] || visitor.deviceType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-bold text-blue-600">
+                          {visitor.visitCount || 1}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {new Date(visitor.timestamp).toLocaleString('es-ES')}
+                        </TableCell>
+                        <TableCell>
+                          {visitor.location ? (
+                            <div className="flex gap-2">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="flex items-center gap-1"
+                                    onClick={() => setSelectedVisitor(visitor)}
+                                  >
+                                    <MapPin className="w-3 h-3" />
+                                    Ver ubicación
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-2xl">
+                                  <DialogHeader>
+                                    <DialogTitle>
+                                      📍 Ubicación de {visitor.deviceName}
+                                    </DialogTitle>
+                                  </DialogHeader>
+                                  {selectedVisitor?.location && (
+                                    <div className="space-y-4 pt-4">
+                                      <div className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200">
+                                        <iframe
+                                          width="100%"
+                                          height="100%"
+                                          loading="lazy"
+                                          allowFullScreen
+                                          referrerPolicy="no-referrer-when-downgrade"
+                                          src={`https://www.google.com/maps?q=${selectedVisitor.location.latitude},${selectedVisitor.location.longitude}&z=16&output=embed`}
+                                          className="w-full h-full"
+                                        />
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                          <span className="font-semibold text-gray-500">Latitud:</span> {selectedVisitor.location.latitude.toFixed(6)}
+                                        </div>
+                                        <div>
+                                          <span className="font-semibold text-gray-500">Longitud:</span> {selectedVisitor.location.longitude.toFixed(6)}
+                                        </div>
+                                        {selectedVisitor.location.accuracy && (
+                                          <div className="col-span-2">
+                                            <span className="font-semibold text-gray-500">Precisión:</span> {selectedVisitor.location.accuracy.toFixed(2)} metros
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex justify-end">
+                                        <a 
+                                          href={getMapUrlForLocation(selectedVisitor.location)} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="text-sm font-bold text-blue-600 hover:underline"
+                                        >
+                                          🔗 Abrir en Google Maps
+                                        </a>
+                                      </div>
+                                    </div>
+                                  )}
+                                </DialogContent>
+                              </Dialog>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">No disponible</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      {expandedRows.has(visitor.id) && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="bg-gray-50">
+                            <div className="p-4 space-y-3">
+                              <h4 className="font-semibold text-gray-800">Información detallada del dispositivo:</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                <div className="space-y-1">
+                                  <p><span className="font-semibold text-gray-600">ID del dispositivo:</span> <code className="bg-gray-200 px-1 rounded">{visitor.id}</code></p>
+                                  <p><span className="font-semibold text-gray-600">Tipo:</span> {deviceNames[visitor.deviceType] || visitor.deviceType}</p>
+                                  <p><span className="font-semibold text-gray-600">Número de visitas:</span> {visitor.visitCount || 1}</p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p><span className="font-semibold text-gray-600">Última visita:</span> {new Date(visitor.timestamp).toLocaleString('es-ES')}</p>
+                                  {visitor.location && (
+                                    <>
+                                      <p><span className="font-semibold text-gray-600">Última ubicación:</span> {visitor.location.latitude.toFixed(4)}, {visitor.location.longitude.toFixed(4)}</p>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              {visitor.userAgent && (
+                                <div className="mt-3">
+                                  <p className="font-semibold text-gray-600 text-sm mb-1">User Agent (Navegador):</p>
+                                  <p className="text-xs text-gray-500 bg-gray-200 p-2 rounded font-mono break-all">{visitor.userAgent}</p>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   ))}
                   {stats.recentVisitors.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-gray-500">
-                        No hay visitas registradas aún
+                      <TableCell colSpan={6} className="h-24 text-center text-gray-500">
+                        No hay visitas registradas aún. Haz clic en "Sincronizar" para cargar datos desde Supabase.
                       </TableCell>
                     </TableRow>
                   )}
@@ -295,7 +464,6 @@ export function Estadisticas() {
           </CardContent>
         </Card>
 
-        {/* All Locations */}
         {stats.visitorsByLocation.length > 0 && (
           <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader>
@@ -325,7 +493,6 @@ export function Estadisticas() {
           </Card>
         )}
 
-        {/* Ayuda y Solución de Problemas */}
         <Card className="shadow-md hover:shadow-lg transition-shadow mt-8">
           <CardHeader>
             <CardTitle>🔧 Solución de Problemas de Geolocalización</CardTitle>
