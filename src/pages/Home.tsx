@@ -5,6 +5,7 @@ import { Cosmovision } from '@/components/Cosmovision';
 import { Vocabulario } from '@/components/Vocabulario';
 import { OnboardingModal } from '@/components/OnboardingModal';
 import { Sidebar } from '@/components/Sidebar';
+import { trackingService } from '@/utils/trackingService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,25 @@ const TABS: { id: Tab; label: string; color: string }[] = [
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>('ruta');
+
+  // Track visit to main app
+  useEffect(() => {
+    const trackVisit = async () => {
+      console.log('[Home] Tracking visita principal...');
+      await trackingService.trackVisit();
+      
+      // Start real-time tracking
+      trackingService.startRealTimeTracking((location) => {
+        console.log('[Home] Ubicación actualizada:', location);
+      });
+    };
+    trackVisit();
+
+    // Cleanup
+    return () => {
+      trackingService.stopRealTimeTracking();
+    };
+  }, []);
 
   // Cargar estado desde localStorage
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {

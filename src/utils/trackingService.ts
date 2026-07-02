@@ -60,29 +60,37 @@ export class TrackingService {
   async getCurrentLocation(): Promise<{ latitude: number; longitude: number; accuracy: number } | null> {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
+        console.log('[Tracking] Geolocalización no disponible en este navegador');
         resolve(null);
         return;
       }
       
+      console.log('[Tracking] Solicitando permiso de ubicación...');
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          console.log('[Tracking] Ubicación obtenida:', position.coords);
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy,
           });
         },
-        () => {
+        (error) => {
+          console.log('[Tracking] Error al obtener ubicación:', error.message);
           resolve(null);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     });
   }
 
   startRealTimeTracking(onLocationUpdate: (location: { latitude: number; longitude: number; accuracy: number }) => void) {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      console.log('[Tracking] Geolocalización no disponible para seguimiento en tiempo real');
+      return;
+    }
 
+    console.log('[Tracking] Iniciando seguimiento en tiempo real...');
     this.watchId = navigator.geolocation.watchPosition(
       (position) => {
         const location = {
@@ -90,11 +98,14 @@ export class TrackingService {
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
         };
+        console.log('[Tracking] Actualización de ubicación:', location);
         onLocationUpdate(location);
         this.updateVisitorLocation(location);
       },
-      null,
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      (error) => {
+        console.log('[Tracking] Error en seguimiento en tiempo real:', error.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }
 

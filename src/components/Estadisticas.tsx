@@ -4,14 +4,26 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { EstadisticasLogin } from './EstadisticasLogin';
 
 export function Estadisticas() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [stats, setStats] = useState<TrackingStats>(trackingService.getStats());
   const [isTracking, setIsTracking] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
-    // Track visit on load
+    // Check if user is already authenticated
+    const auth = localStorage.getItem('namuiWam_dashboard_auth');
+    if (auth === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    // Track visit on load only if authenticated
     const track = async () => {
       setIsTracking(true);
       await trackingService.trackVisit();
@@ -28,7 +40,12 @@ export function Estadisticas() {
     return () => {
       trackingService.stopRealTimeTracking();
     };
-  }, []);
+  }, [isAuthenticated]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('namuiWam_dashboard_auth');
+    setIsAuthenticated(false);
+  };
 
   // Calculate percentages for charts
   const getDevicePercentage = (deviceType: string) => {
@@ -87,6 +104,12 @@ export function Estadisticas() {
     );
   };
 
+  // If not authenticated, show login
+  if (!isAuthenticated) {
+    return <EstadisticasLogin onLogin={() => setIsAuthenticated(true)} />;
+  }
+
+  // If authenticated, show dashboard
   return (
     <div className="min-h-screen bg-gray-50 w-full">
       {/* Header */}
@@ -96,9 +119,17 @@ export function Estadisticas() {
             <h1 className="text-2xl font-bold text-gray-900">📊 Dashboard de Estadísticas</h1>
             <p className="text-sm text-gray-500 mt-1">Datos de uso de la aplicación Namui Wam</p>
           </div>
-          <a href="/" className="text-sm font-semibold text-blue-600 hover:text-blue-800 underline">
-            ← Volver al juego
-          </a>
+          <div className="flex items-center gap-4">
+            <a href="/" className="text-sm font-semibold text-blue-600 hover:text-blue-800 underline">
+              ← Volver al juego
+            </a>
+            <button 
+              onClick={handleLogout}
+              className="text-sm font-semibold text-red-600 hover:text-red-800 underline"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
         </div>
       </header>
 
